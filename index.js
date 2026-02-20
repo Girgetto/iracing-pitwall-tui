@@ -140,8 +140,10 @@ function lapBar(pct) {
 // ─── Render ───────────────────────────────────────────────────────────────────
 
 function render() {
-  // ANSI escape: clear screen and move cursor to top-left
-  process.stdout.write('\x1Bc');
+  // Hide cursor + jump to top-left without blanking the screen first.
+  // Writing over existing content and then clearing the tail (ESC[J) avoids
+  // the blank-frame flash that ESC[c (full terminal reset) causes.
+  process.stdout.write('\x1B[?25l\x1B[H');
 
   // ── Waiting state ──────────────────────────────────────────────────────────
   if (!isConnected || !currentTelemetry || !currentSessionInfo) {
@@ -157,6 +159,7 @@ function render() {
     console.log(chalk.gray('  • This app reads from the Windows shared memory file'));
     console.log(chalk.gray('    (Local\\IRSDKMemMapFileName) via iracing-sdk-js.'));
     console.log(chalk.gray('\n  Press Ctrl+C to exit.\n'));
+    process.stdout.write('\x1B[J\x1B[?25h');
     return;
   }
 
@@ -308,6 +311,7 @@ function render() {
     console.log(chalk.gray('  idxPos sample (first 10): ') + chalk.white(JSON.stringify(idxPos.slice(0, 10))));
     console.log(chalk.gray('  si top-level keys: ') + chalk.white(JSON.stringify(Object.keys(si ?? {}))));
     console.log(chalk.gray('  DriverInfo keys: ') + chalk.white(JSON.stringify(Object.keys(si?.DriverInfo ?? {}))));
+    process.stdout.write('\x1B[J\x1B[?25h');
     return;
   }
 
@@ -363,6 +367,9 @@ function render() {
 
   console.log(table.toString());
   console.log(chalk.gray(`  Updated: ${new Date().toLocaleTimeString()}   Press Ctrl+C to exit.\n`));
+  // Clear everything below the current cursor position (leftover lines from a
+  // taller previous frame) then restore the cursor.
+  process.stdout.write('\x1B[J\x1B[?25h');
 }
 
 // ─── SDK Initialisation ───────────────────────────────────────────────────────
