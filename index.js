@@ -187,7 +187,14 @@ function render() {
   // iRacing sets this to 604800 (one week) for non-timed sessions.
   const timeRemain    = tel.SessionTimeRemain;
   const timeRemainStr = (timeRemain && timeRemain < 604800)
-    ? formatTime(timeRemain)
+    ? (() => {
+        const h = Math.floor(timeRemain / 3600);
+        const m = Math.floor((timeRemain % 3600) / 60);
+        const s = Math.floor(timeRemain % 60);
+        return h > 0
+          ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+          : `${m}:${String(s).padStart(2, '0')}`;
+      })()
     : chalk.gray('N/A');
 
   // ── Driver lookup ──────────────────────────────────────────────────────────
