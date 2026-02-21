@@ -32,29 +32,6 @@ let currentSessionInfo = null; // Latest parsed session info YAML
 let isConnected        = false;
 let dotCount           = 0;    // Animated waiting indicator
 
-// ─── iRacing Session Flag Bitmask Values ──────────────────────────────────────
-// The `SessionFlags` telemetry variable is a 32-bit integer where each bit
-// represents a specific flag condition.  These values match the irsdk_Flags
-// enum from the official iRacing SDK header (irsdk_defines.h).
-
-const FLAGS = {
-  checkered:     0x00000001,
-  white:         0x00000002,  // Last lap
-  green:         0x00000004,
-  yellow:        0x00000008,  // Yellow flag out
-  red:           0x00000010,
-  blue:          0x00000020,  // Blue flag (being lapped)
-  debris:        0x00000040,
-  yellowWaving:  0x00000100,  // Yellow flag waving
-  oneLapToGreen: 0x00000200,
-  greenHeld:     0x00000400,
-  tenToGo:       0x00000800,
-  fiveToGo:      0x00001000,
-  caution:       0x00004000,  // Full-course caution
-  cautionWaving: 0x00008000,
-  startReady:    0x20000000,
-  startGo:       0x80000000,
-};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -135,32 +112,6 @@ function formatGap(gapSeconds, position) {
   return `+${gapSeconds.toFixed(3)}s`;
 }
 
-/** True when the given flag bit is set in the flags bitmask. */
-function hasFlag(flags, bit) {
-  return (flags & bit) !== 0;
-}
-
-/**
- * Produce a highlighted flag-status string to display in the header.
- * Priority order: checkered → red → caution/yellow → white → green.
- */
-function getFlagBanner(flags) {
-  if (!flags) return '';
-  if (hasFlag(flags, FLAGS.checkered))
-    return chalk.bgWhite.black.bold('  🏁  CHECKERED FLAG  ');
-  if (hasFlag(flags, FLAGS.red))
-    return chalk.bgRed.white.bold('  🔴  RED FLAG – SESSION STOPPED  ');
-  if (hasFlag(flags, FLAGS.caution) || hasFlag(flags, FLAGS.cautionWaving) ||
-      hasFlag(flags, FLAGS.yellow)  || hasFlag(flags, FLAGS.yellowWaving))
-    return chalk.bgYellow.black.bold('  ⚠   CAUTION / YELLOW FLAG  ⚠  ');
-  if (hasFlag(flags, FLAGS.oneLapToGreen))
-    return chalk.yellow.bold('  One lap to green  ');
-  if (hasFlag(flags, FLAGS.white))
-    return chalk.white.bold('  🏳  WHITE FLAG – FINAL LAP  ');
-  if (hasFlag(flags, FLAGS.green) || hasFlag(flags, FLAGS.startGo))
-    return chalk.green.bold('  🟢  GREEN FLAG  ');
-  return '';
-}
 
 /** Pick a chalk colour function based on overall position. */
 function posColor(pos) {
@@ -238,10 +189,6 @@ function render() {
   const timeRemainStr = (timeRemain && timeRemain < 604800)
     ? formatTime(timeRemain)
     : chalk.gray('N/A');
-
-  // SessionFlags: 32-bit bitmask of active flag conditions
-  const sessionFlags = tel.SessionFlags ?? 0;
-  const flagBanner   = getFlagBanner(sessionFlags);
 
   // ── Driver lookup ──────────────────────────────────────────────────────────
   // DriverInfo.Drivers is an array of driver records.  CarIdx is the index
@@ -348,7 +295,6 @@ function render() {
 
   // ── Header ─────────────────────────────────────────────────────────────────
   console.log(chalk.bold.cyan('\n  iRacing Live Telemetry'));
-  if (flagBanner) console.log(`  ${flagBanner}`);
   console.log(
     chalk.gray('  Session: ') + chalk.white(sessionType) +
     chalk.gray('   Lap: ')    + chalk.white(`${playerLap} / ${totalLaps}`) +
