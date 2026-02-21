@@ -58,6 +58,50 @@ const FLAGS = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Estimate iRating changes for all classified cars using a pairwise ELO model.
+ *
+ * For every pair (A, B), the probability that A beats B is:
+ *   P(A beats B) = 1 / (1 + e^((ir_B - ir_A) / 1500))
+ *
+ * Summing over all opponents gives an expected wins total.  The actual wins
+ * total is simply the number of cars a driver finished ahead of.  The
+ * difference, scaled by (200 / n), approximates the iRating change iRacing
+ * awards.  This is an accepted community approximation — the exact formula
+ * is not public.
+ */
+function calcIRatingDeltas(cars) {
+  const classified = cars.filter(c => c.pos > 0 && c.iRating > 0);
+  const n = classified.length;
+  if (n < 2) return;
+
+  const k = 200 / n;
+
+  for (const car of classified) {
+    let sumExpected = 0;
+    let sumActual   = 0;
+    for (const opp of classified) {
+      if (opp === car) continue;
+      sumExpected += 1 / (1 + Math.exp((opp.iRating - car.iRating) / 1500));
+      sumActual   += car.pos < opp.pos ? 1 : 0;
+    }
+    car.iRatingDelta = Math.round((sumActual - sumExpected) * k);
+  }
+}
+
+/**
+ * Rough Safety Rating delta estimate for the player.
+ *
+ * iRacing's SR formula is not public, but community analysis suggests:
+ *   +0.12 SR per clean lap (4 safe corners × ~0.03 per corner)
+ *   −1.0  SR per incident point accumulated
+ *
+ * Values are approximate and may differ slightly from in-game results.
+ */
+function estimateSRDelta(laps, incidents) {
+  return ((laps * 0.12) - (incidents * 1.0)).toFixed(2);
+}
+
 /** Format seconds → "M:SS.mmm". Negative / sentinel values display as dashes. */
 function formatTime(seconds) {
   if (seconds == null || seconds < 0) return chalk.gray('--:--.---');
@@ -73,7 +117,7 @@ function formatTime(seconds) {
  * so we detect that case and show "+N Laps" instead.
  */
 function formatGap(gapSeconds, position) {
-  if (position <= 1) return chalk.green.bold('Leader');
+  if (position === 1) return chalk.green.bold('Leader');
   if (gapSeconds == null || gapSeconds < 0) return chalk.gray('--');
 
   // iRacing encodes "lapped by N" as gap ≈ N × 3600 (one artificial hour per lap down)
@@ -219,6 +263,9 @@ function render() {
   // CarIdxBestLapTime[i] – personal best lap time in seconds (−1 = no lap yet)
   // CarIdxF2Time[i]      – time behind leader or car ahead, in seconds
 
+  const playerCarIdx    = tel.PlayerCarIdx        ?? -1;
+  const playerIncidents = tel.PlayerCarMyIncidents ?? 0;
+
   const idxPos      = tel.CarIdxPosition      ?? [];
   const idxClassPos = tel.CarIdxClassPosition  ?? [];
   const idxLap      = tel.CarIdxLap            ?? [];
@@ -228,11 +275,14 @@ function render() {
   const idxGap      = tel.CarIdxF2Time         ?? [];
 
   const cars = [];
+  const seenIdx = new Set();
 
   // Iterate over the driver map so cars appear in practice/qualifying too,
   // where CarIdxPosition may be 0 for all cars.
   for (const [idxStr, driver] of Object.entries(driverMap)) {
     const idx = parseInt(idxStr, 10);
+    if (seenIdx.has(idx)) continue;
+    seenIdx.add(idx);
 
     // Skip the pace car (CarIsPaceCar may be string "1" or number 1 from YAML)
     // eslint-disable-next-line eqeqeq
@@ -260,6 +310,9 @@ function render() {
       bestLap:    idxBestLap[idx],
       gap:        idxGap[idx],
       stalled,
+      isPlayer:   idx === playerCarIdx,
+      iRating:    parseInt(driver.IRating ?? 0, 10),
+      iRatingDelta: null, // filled in by calcIRatingDeltas()
     });
   }
 
@@ -272,6 +325,26 @@ function render() {
     const bP = (b.laps ?? 0) + (b.distPct ?? 0);
     return bP - aP;
   });
+
+  // Recalculate class positions from the sorted order so they're always correct,
+  // regardless of what CarIdxClassPosition reports (which mirrors overall pos in
+  // single-class races and can sometimes be unreliable in multiclass).
+  const classCounters = {};
+  for (const car of cars) {
+    const cls = car.carClass || '__default__';
+    classCounters[cls] = (classCounters[cls] ?? 0) + 1;
+    car.classPos = classCounters[cls];
+  }
+
+  // If every car is in the same class, class position == overall position, so
+  // suppress the Cls column to avoid redundant data.
+  const uniqueClasses = new Set(cars.map(c => c.carClass || '__default__'));
+  const multiClass = uniqueClasses.size > 1;
+
+  // Estimate iRating deltas for all classified cars.
+  calcIRatingDeltas(cars);
+
+  const playerCar = cars.find(c => c.isPlayer);
 
   // ── Header ─────────────────────────────────────────────────────────────────
   console.log(chalk.bold.cyan('\n  iRacing Live Telemetry'));
@@ -319,7 +392,6 @@ function render() {
   const table = new Table({
     head: [
       chalk.bold.white('Pos'),
-      chalk.bold.white('Cls'),
       chalk.bold.white('#'),
       chalk.bold.white('Driver'),
       chalk.bold.white('Class'),
@@ -328,9 +400,11 @@ function render() {
       chalk.bold.white('Best Lap'),
       chalk.bold.white('Gap'),
       chalk.bold.white('Track %'),
+      chalk.bold.white('iR'),
+      chalk.bold.white('Δ iR'),
     ],
-    colWidths:  [6, 6, 6, 24, 9, 7, 12, 12, 13, 14],
-    colAligns:  ['right', 'right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right'],
+    colWidths:  [6, 6, 24, 9, 7, 11, 11, 12, 14, 7, 8],
+    colAligns:  ['right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'],
     chars: {
       // Minimal border style for a cleaner look
       top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
@@ -342,26 +416,49 @@ function render() {
   });
 
   for (const car of cars) {
-    const color    = posColor(car.pos);
-    const nameCell = car.stalled
-      ? chalk.red(car.name.padEnd(22).slice(0, 22))   // Stalled / retired → red
-      : color(car.name.padEnd(22).slice(0, 22));
+    const color = posColor(car.pos);
+    const p     = car.isPlayer;
 
-    const classPosCell = car.classPos > 0
-      ? chalk.cyan(`P${car.classPos}`)
+    const nameCell = car.stalled
+      ? chalk.red(car.name.padEnd(22).slice(0, 22))
+      : p
+        ? chalk.yellow.bold(('▶ ' + car.name).padEnd(22).slice(0, 22))
+        : color(car.name.padEnd(22).slice(0, 22));
+
+    // iRating cell
+    const iRCell = car.iRating > 0
+      ? (p ? chalk.yellow.bold(String(car.iRating)) : chalk.white(String(car.iRating)))
       : chalk.gray('--');
 
+    // Δ iRating cell — green/red by direction; yellow-bold for player
+    let iRDeltaCell;
+    if (car.iRatingDelta == null) {
+      iRDeltaCell = chalk.gray('--');
+    } else {
+      const sign   = car.iRatingDelta >= 0 ? '+' : '';
+      const dStr   = `${sign}${car.iRatingDelta}`;
+      const dColor = car.iRatingDelta >= 0 ? chalk.green.bold : chalk.red.bold;
+      iRDeltaCell  = p ? chalk.yellow.bold(dStr) : dColor(dStr);
+    }
+
+    // Last lap cell — purple when it matches the personal best (just set a PB)
+    const isBestLap = car.lastLap > 0 && car.bestLap > 0 && car.lastLap === car.bestLap;
+    const lastLapCell = isBestLap
+      ? chalk.magenta.bold(formatTime(car.lastLap))
+      : p ? chalk.yellow(formatTime(car.lastLap)) : formatTime(car.lastLap);
+
     table.push([
-      color(`P${car.pos}`),
-      classPosCell,
-      chalk.yellow(`#${car.number}`),
+      p ? chalk.yellow.bold(`P${car.pos}`) : color(`P${car.pos}`),
+      p ? chalk.yellow.bold(`#${car.number}`) : chalk.yellow(`#${car.number}`),
       nameCell,
-      chalk.gray(car.carClass.slice(0, 7)),
-      chalk.white(String(car.laps)),
-      formatTime(car.lastLap),
-      formatTime(car.bestLap),
-      formatGap(car.gap, car.pos),
-      chalk.blue(lapBar(car.distPct)),
+      p ? chalk.yellow(car.carClass.slice(0, 7)) : chalk.gray(car.carClass.slice(0, 7)),
+      p ? chalk.yellow.bold(String(car.laps)) : chalk.white(String(car.laps)),
+      lastLapCell,
+      p ? chalk.yellow(formatTime(car.bestLap)) : formatTime(car.bestLap),
+      p ? chalk.yellow(formatGap(car.gap, car.pos)) : formatGap(car.gap, car.pos),
+      p ? chalk.yellow(lapBar(car.distPct)) : chalk.blue(lapBar(car.distPct)),
+      iRCell,
+      iRDeltaCell,
     ]);
   }
 
