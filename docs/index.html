@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iRacing Pitwall TUI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+    }
+
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 80px 24px 60px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .hero h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 span { color: #f78166; }
+
+    .hero p {
+      font-size: 1.15rem;
+      color: #8b949e;
+      max-width: 560px;
+      margin: 0 auto 36px;
+    }
+
+    .btn-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #238636;
+      color: #fff;
+      font-size: 1.05rem;
+      font-weight: 600;
+      padding: 14px 32px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+
+    .btn-download:hover {
+      background: #2ea043;
+      text-decoration: none;
+    }
+
+    .btn-download svg { flex-shrink: 0; }
+
+    .version-note {
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: #484f58;
+    }
+
+    /* ── Preview ── */
+    .preview {
+      max-width: 900px;
+      margin: 60px auto;
+      padding: 0 24px;
+    }
+
+    .preview h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #c9d1d9;
+    }
+
+    .terminal {
+      background: #010409;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .terminal-bar {
+      background: #161b22;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red    { background: #ff5f57; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green  { background: #28c840; }
+
+    .terminal-title {
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 0.78rem;
+      color: #484f58;
+      font-family: monospace;
+    }
+
+    .terminal pre {
+      padding: 24px;
+      font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      overflow-x: auto;
+      color: #c9d1d9;
+    }
+
+    .t-cyan   { color: #79c0ff; }
+    .t-green  { color: #3fb950; font-weight: bold; }
+    .t-yellow { color: #e3b341; font-weight: bold; }
+    .t-gray   { color: #484f58; }
+    .t-red    { color: #f85149; }
+    .t-blue   { color: #58a6ff; }
+    .t-purple { color: #bc8cff; font-weight: bold; }
+    .t-bold   { font-weight: bold; }
+
+    /* ── Features ── */
+    .features {
+      max-width: 900px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+
+    .features h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 28px;
+      color: #c9d1d9;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card-icon { font-size: 1.6rem; margin-bottom: 10px; }
+
+    .card h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: #e6edf3;
+    }
+
+    .card p {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+
+    /* ── Install ── */
+    .install {
+      max-width: 900px;
+      margin: 0 auto 80px;
+      padding: 0 24px;
+    }
+
+    .install h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #c9d1d9;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      background: #1f6feb;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-text h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .step-text p {
+      font-size: 0.85rem;
+      color: #8b949e;
+    }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid #21262d;
+      text-align: center;
+      padding: 32px 24px;
+      font-size: 0.82rem;
+      color: #484f58;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>iRacing <span>Pitwall</span> TUI</h1>
+    <p>A terminal-based live timing leaderboard for iRacing. No browser, no extra software — just open a terminal alongside iRacing.</p>
+
+    <a class="btn-download"
+       id="download-btn"
+       href="https://github.com/YOUR_USERNAME/iracing-pitwall-tui/releases/latest/download/iracing-pitwall-tui.exe">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z"/>
+        <path d="M7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.97a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.779a.749.749 0 1 1 1.06-1.06l1.97 1.97Z"/>
+      </svg>
+      Download for Windows
+    </a>
+    <p class="version-note">Free &amp; open source &nbsp;·&nbsp; No install required &nbsp;·&nbsp; Windows only</p>
+  </section>
+
+  <!-- Terminal preview -->
+  <section class="preview">
+    <h2>Live leaderboard preview</h2>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot dot-red"></div>
+        <div class="dot dot-yellow"></div>
+        <div class="dot dot-green"></div>
+        <span class="terminal-title">iracing-pitwall-tui.exe</span>
+      </div>
+      <pre>
+  <span class="t-cyan t-bold">iRacing Live Telemetry</span>
+  <span class="t-gray">Session: </span><span class="t-bold">Race</span>   <span class="t-gray">Lap: </span><span class="t-bold">12 / 30</span>   <span class="t-gray">Time remaining: </span><span class="t-bold">18:42</span>   <span class="t-gray">Cars: </span><span class="t-bold">20</span>
+  <span class="t-gray">────────────────────────────────────────────────────────────────────────────────────────────────────</span>
+┌─────┬──────┬────────────────────────┬─────────┬───────┬───────────┬───────────┬─────────────┬──────────────┬───────┬────────┐
+│ <span class="t-bold">Pos</span> │   <span class="t-bold">#</span>  │ <span class="t-bold">Driver</span>                 │ <span class="t-bold">Class</span>   │ <span class="t-bold">Laps</span>  │  <span class="t-bold">Last Lap</span> │  <span class="t-bold">Best Lap</span> │         <span class="t-bold">Gap</span> │      <span class="t-bold">Track %</span> │   <span class="t-bold">iR</span> │   <span class="t-bold">Δ iR</span> │
+├─────┼──────┼────────────────────────┼─────────┼───────┼───────────┼───────────┼─────────────┼──────────────┼───────┼────────┤
+│ <span class="t-green">P1</span>  │ <span class="t-yellow">#23</span>  │ Lorenzo Ricci          │ <span class="t-gray">GTP    </span> │    12 │ <span class="t-purple">1:41.905</span>  │  1:41.905 │ <span class="t-green">Leader</span>      │ <span class="t-blue">██████  98%</span>  │  4821 │ <span class="t-green">+42</span>  │
+│ <span class="t-bold">P2</span>  │ <span class="t-yellow">#7</span>   │ Marco Bianchi          │ <span class="t-gray">GTP    </span> │    12 │  1:42.751 │  1:42.104 │     +1.847s │ <span class="t-blue">█████░  84%</span>  │  4102 │ <span class="t-green">+18</span>  │
+│ <span class="t-bold">P3</span>  │ <span class="t-yellow">#44</span>  │ Sofia Esposito         │ <span class="t-gray">GTP    </span> │    12 │  1:43.120 │  1:42.390 │     +4.213s │ <span class="t-blue">████░░  71%</span>  │  3876 │ <span class="t-green">+9</span>   │
+│  P4 │ <span class="t-yellow">#12</span>  │ Yuki Tanaka            │ <span class="t-gray">GTP    </span> │    11 │  1:43.882 │  1:43.015 │    +14.002s │ <span class="t-blue">███░░░  52%</span>  │  3654 │  <span class="t-red">-4</span>   │
+│  P5 │ <span class="t-yellow">#88</span>  │ <span class="t-yellow t-bold">▶ Giorgio Rossi        </span> │ <span class="t-yellow">GTP    </span> │    <span class="t-yellow t-bold">11</span> │  <span class="t-yellow">1:44.210</span>  │  <span class="t-yellow">1:43.740</span> │   <span class="t-yellow">+21.774s</span> │ <span class="t-yellow">██░░░░  38%</span>  │  <span class="t-yellow t-bold">3210</span> │ <span class="t-yellow t-bold">-12</span>  │
+│  P6 │ <span class="t-yellow">#5</span>   │ Alex Novak             │ <span class="t-gray">GTP    </span> │    11 │  1:44.501 │  1:44.100 │    +28.119s │ <span class="t-blue">█░░░░░  19%</span>  │  3088 │  <span class="t-red">-21</span>  │
+│  P7 │ <span class="t-yellow">#31</span>  │ Emily Müller           │ <span class="t-gray">LMP2   </span> │    10 │  1:49.340 │  1:48.890 │         <span class="t-red">+1L</span> │ <span class="t-blue">███░░░  55%</span>  │  2890 │  <span class="t-red">-38</span>  │
+└─────┴──────┴────────────────────────┴─────────┴───────┴───────────┴───────────┴─────────────┴──────────────┴───────┴────────┘
+  <span class="t-gray">Updated: 15:42:07   Press Ctrl+C to exit.</span>
+      </pre>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features">
+    <h2>Features</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="card-icon">⚡</div>
+        <h3>Real-time data</h3>
+        <p>Reads directly from iRacing shared memory. Refreshes every 500 ms with no flicker.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <h3>iRating tracker</h3>
+        <p>Live estimated iRating gain/loss for every driver based on current position using a pairwise ELO model.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏎️</div>
+        <h3>Your car highlighted</h3>
+        <p>Your row is always highlighted in yellow with a ▶ marker so you can spot yourself instantly.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🟣</div>
+        <h3>Personal best detection</h3>
+        <p>Last lap turns purple the moment it matches your best lap, highlighting a new personal best.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏁</div>
+        <h3>Multiclass support</h3>
+        <p>Lapped cars shown with +NL gap. Works across all session types — race, practice, and qualify.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📦</div>
+        <h3>No install needed</h3>
+        <p>Single standalone .exe — Node.js is bundled inside. Just download and run.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- How to use -->
+  <section class="install">
+    <h2>How to use</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">
+          <h3>Download the .exe</h3>
+          <p>Click the download button above. No installer, no Node.js required.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          <h3>Start iRacing and load a session</h3>
+          <p>Practice, qualifying, or race — any session type works.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          <h3>Run iracing-pitwall-tui.exe</h3>
+          <p>Open a terminal (CMD or PowerShell), navigate to where you saved the file, and run it. The leaderboard appears automatically once iRacing is detected.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">
+          <h3>Press Ctrl+C to exit</h3>
+          <p>The app disconnects cleanly when iRacing closes or when you press Ctrl+C.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>Open source · <a href="https://github.com/YOUR_USERNAME/iracing-pitwall-tui">View on GitHub</a> · Not affiliated with iRacing.com Motorsport Simulations</p>
+  </footer>
+
+</body>
+</html>
