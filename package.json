@@ -1,6 +1,6 @@
 {
   "name": "iracing-live-telemetry",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "description": "Live iRacing telemetry timing table in the terminal",
   "main": "index.js",
   "bin": "index.js",
