@@ -24,6 +24,7 @@
 const irsdk  = require('iracing-sdk-js');
 const Table  = require('cli-table3');
 const chalk  = require('chalk');
+const pkg    = require('./package.json');
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,27 @@ function formatGap(gapSeconds, position) {
 }
 
 
+/**
+ * Resolve a per-car flag from CarIdxSessionFlags into a short coloured label.
+ * The SDK returns an array of strings e.g. ["Blue"], ["Servicible"], [].
+ * Note: the SDK has a typo — "Servicible" instead of "Serviceable".
+ * Priority: DQ > black > meatball > blue > warn.
+ */
+function getCarFlagCell(raw) {
+  // Unwrap array — SDK returns [] or ["FlagName"]
+  const flags = Array.isArray(raw) ? raw.map(s => String(s).toLowerCase()) : [];
+  if (flags.length === 0) return '';
+
+  const has = (str) => flags.some(f => f.includes(str));
+
+  if (has('disqualif'))             return chalk.bgRed.white.bold(' DQ ');
+  if (has('black'))                 return chalk.bgRed.white.bold(' BLK');
+  if (has('repair'))                    return chalk.bgYellow.black.bold('MBAL');
+  if (has('blue'))                  return chalk.blue.bold('BLUE');
+  if (has('furled'))                return chalk.yellow.bold('WARN');
+  return '';
+}
+
 /** Pick a chalk colour function based on overall position. */
 function posColor(pos) {
   if (pos === 1) return chalk.green.bold;
@@ -146,7 +168,7 @@ function render() {
     dotCount++;
     console.log(
       chalk.bold.yellow('\n  iRacing Live Telemetry') +
-      chalk.gray('  v1.0')
+      chalk.gray(`  v${pkg.version}`)
     );
     console.log(chalk.gray('  ─'.repeat(30)));
     console.log(chalk.yellow(`\n  Waiting for iRacing${dots}\n`));
@@ -220,13 +242,14 @@ function render() {
   const playerCarIdx    = tel.PlayerCarIdx        ?? -1;
   const playerIncidents = tel.PlayerCarMyIncidents ?? 0;
 
-  const idxPos      = tel.CarIdxPosition      ?? [];
-  const idxClassPos = tel.CarIdxClassPosition  ?? [];
-  const idxLap      = tel.CarIdxLap            ?? [];
-  const idxDistPct  = tel.CarIdxLapDistPct     ?? [];
-  const idxLastLap  = tel.CarIdxLastLapTime    ?? [];
-  const idxBestLap  = tel.CarIdxBestLapTime    ?? [];
-  const idxGap      = tel.CarIdxF2Time         ?? [];
+  const idxPos      = tel.CarIdxPosition        ?? [];
+  const idxClassPos = tel.CarIdxClassPosition    ?? [];
+  const idxLap      = tel.CarIdxLap              ?? [];
+  const idxDistPct  = tel.CarIdxLapDistPct       ?? [];
+  const idxLastLap  = tel.CarIdxLastLapTime      ?? [];
+  const idxBestLap  = tel.CarIdxBestLapTime      ?? [];
+  const idxGap      = tel.CarIdxF2Time           ?? [];
+  const idxCarFlags = tel.CarIdxSessionFlags     ?? [];
 
   const cars = [];
   const seenIdx = new Set();
@@ -267,14 +290,15 @@ function render() {
       isPlayer:   idx === playerCarIdx,
       iRating:    parseInt(driver.IRating ?? 0, 10),
       iRatingDelta: null, // filled in by calcIRatingDeltas()
+      carFlag:    idxCarFlags[idx] ?? null,
     });
   }
 
-  // Sort by race position when available; fall back to lap progress (laps + distPct).
+  // Always sort by total track progress (laps completed + fractional lap) so
+  // positions update in real time as cars move around the track.
+  // CarIdxPosition only refreshes at lap crossings so it cannot be used for
+  // live ordering.
   cars.sort((a, b) => {
-    if (a.pos > 0 && b.pos > 0) return a.pos - b.pos;
-    if (a.pos > 0) return -1;
-    if (b.pos > 0) return 1;
     const aP = (a.laps ?? 0) + (a.distPct ?? 0);
     const bP = (b.laps ?? 0) + (b.distPct ?? 0);
     return bP - aP;
@@ -353,11 +377,12 @@ function render() {
       chalk.bold.white('Best Lap'),
       chalk.bold.white('Gap'),
       chalk.bold.white('Track %'),
+      chalk.bold.white('Flag'),
       chalk.bold.white('iR'),
       chalk.bold.white('Δ iR'),
     ],
-    colWidths:  [6, 6, 24, 9, 7, 11, 11, 12, 14, 7, 8],
-    colAligns:  ['right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right'],
+    colWidths:  [6, 6, 24, 9, 7, 11, 11, 12, 14, 6, 7, 8],
+    colAligns:  ['right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
     chars: {
       // Minimal border style for a cleaner look
       top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
@@ -400,6 +425,8 @@ function render() {
       ? chalk.magenta.bold(formatTime(car.lastLap))
       : p ? chalk.yellow(formatTime(car.lastLap)) : formatTime(car.lastLap);
 
+    const flagCell = getCarFlagCell(car.carFlag);
+
     table.push([
       p ? chalk.yellow.bold(`P${car.pos}`) : color(`P${car.pos}`),
       p ? chalk.yellow.bold(`#${car.number}`) : chalk.yellow(`#${car.number}`),
@@ -410,6 +437,7 @@ function render() {
       p ? chalk.yellow(formatTime(car.bestLap)) : formatTime(car.bestLap),
       p ? chalk.yellow(formatGap(car.gap, car.pos)) : formatGap(car.gap, car.pos),
       p ? chalk.yellow(lapBar(car.distPct)) : chalk.blue(lapBar(car.distPct)),
+      flagCell,
       iRCell,
       iRDeltaCell,
     ]);
@@ -464,7 +492,41 @@ iracing.on('Telemetry', (data) => {
 
 // Redraw every 500 ms.  This is independent of how fast iRacing writes data;
 // we simply display whatever the latest snapshot happens to be at each tick.
-setInterval(render, 500);
+const renderInterval = setInterval(() => {
+  try {
+    render();
+  } catch (err) {
+    clearInterval(renderInterval);
+    // Move to a clean line below the TUI so the error is not overwritten.
+    process.stdout.write('\x1B[J\x1B[?25h\n');
+    console.error(chalk.red.bold('Render error (display loop stopped):'));
+    console.error(err);
+  }
+}, 500);
 
 // Show the waiting screen immediately rather than waiting for the first tick.
-render();
+try {
+  render();
+} catch (err) {
+  clearInterval(renderInterval);
+  process.stdout.write('\x1B[J\x1B[?25h\n');
+  console.error(chalk.red.bold('Render error (display loop stopped):'));
+  console.error(err);
+}
+
+// Catch any other uncaught errors so they are not swallowed by the TUI loop.
+process.on('uncaughtException', (err) => {
+  clearInterval(renderInterval);
+  process.stdout.write('\x1B[J\x1B[?25h\n');
+  console.error(chalk.red.bold('Uncaught exception:'));
+  console.error(err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  clearInterval(renderInterval);
+  process.stdout.write('\x1B[J\x1B[?25h\n');
+  console.error(chalk.red.bold('Unhandled promise rejection:'));
+  console.error(reason);
+  process.exit(1);
+});

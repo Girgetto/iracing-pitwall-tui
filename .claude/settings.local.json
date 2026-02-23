@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /c/Users/giorg/Desktop/coding/iracing-pitwall-tui && npx pkg . --targets node18-win-x64 --output dist/iracing-pitwall-tui.exe 2>&1)",
+      "Bash(cd /c/Users/giorg/Desktop/coding/iracing-pitwall-tui && npx pkg . --targets node22-win-x64 --output dist/iracing-pitwall-tui.exe 2>&1)"
+    ]
+  }
+}
