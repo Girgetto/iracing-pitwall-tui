@@ -324,13 +324,21 @@ function render() {
 
   const playerCar = cars.find(c => c.isPlayer);
 
+  // ── SOF calculation ────────────────────────────────────────────────────────
+  // Strength of Field: average iRating of all drivers with a valid iRating.
+  const ratedCars = cars.filter(c => c.iRating > 0);
+  const sofStr = ratedCars.length > 0
+    ? String(Math.round(ratedCars.reduce((sum, c) => sum + c.iRating, 0) / ratedCars.length))
+    : chalk.gray('N/A');
+
   // ── Header ─────────────────────────────────────────────────────────────────
   console.log(chalk.bold.cyan('\n  iRacing Live Telemetry'));
   console.log(
     chalk.gray('  Session: ') + chalk.white(sessionType) +
     chalk.gray('   Lap: ')    + chalk.white(`${playerLap} / ${totalLaps}`) +
     chalk.gray('   Time remaining: ') + chalk.white(timeRemainStr) +
-    chalk.gray('   Cars: ') + chalk.white(String(cars.length))
+    chalk.gray('   Cars: ') + chalk.white(String(cars.length)) +
+    chalk.gray('   SOF: ') + chalk.white(sofStr)
   );
   console.log(chalk.gray('  ' + '─'.repeat(100)));
 
