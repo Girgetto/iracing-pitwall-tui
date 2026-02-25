@@ -142,7 +142,7 @@ function getCarFlagCell(raw) {
 function licenseCell(licStr) {
   if (!licStr) return chalk.gray('--');
   const letter = licStr.trim().charAt(0).toUpperCase();
-  const label  = licStr.slice(0, 7); // keep it short, e.g. "A 4.32"
+  const label  = letter; // just the class letter
   switch (letter) {
     case 'R': return chalk.red.bold(label);
     case 'D': return chalk.blue.bold(label);
@@ -410,7 +410,7 @@ function render() {
       chalk.bold.white('iR'),
       chalk.bold.white('Δ iR'),
     ],
-    colWidths:  [6, 6, 24, 9, 9, 7, 11, 11, 12, 14, 6, 7, 8],
+    colWidths:  [6, 6, 16, 4, 9, 7, 11, 11, 12, 14, 6, 7, 8],
     colAligns:  ['right', 'right', 'left', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
     chars: {
       // Minimal border style for a cleaner look
@@ -427,10 +427,10 @@ function render() {
     const p     = car.isPlayer;
 
     const nameCell = car.stalled
-      ? chalk.red(car.name.padEnd(22).slice(0, 22))
+      ? chalk.red(car.name.padEnd(14).slice(0, 14))
       : p
-        ? chalk.yellow.bold(('▶ ' + car.name).padEnd(22).slice(0, 22))
-        : color(car.name.padEnd(22).slice(0, 22));
+        ? chalk.yellow.bold(('▶ ' + car.name).padEnd(14).slice(0, 14))
+        : color(car.name.padEnd(14).slice(0, 14));
 
     // iRating cell
     const iRCell = car.iRating > 0
