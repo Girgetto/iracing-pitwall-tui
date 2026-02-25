@@ -135,6 +135,25 @@ function getCarFlagCell(raw) {
   return '';
 }
 
+/**
+ * Colour a license string (e.g. "A 4.32") by license class letter.
+ * R=rookie(red), D=blue, C=orange, B=green, A=light-blue, P/WC=black on gold.
+ */
+function licenseCell(licStr) {
+  if (!licStr) return chalk.gray('--');
+  const letter = licStr.trim().charAt(0).toUpperCase();
+  const label  = licStr.slice(0, 7); // keep it short, e.g. "A 4.32"
+  switch (letter) {
+    case 'R': return chalk.red.bold(label);
+    case 'D': return chalk.blue.bold(label);
+    case 'C': return chalk.hex('#FFA500').bold(label);
+    case 'B': return chalk.green.bold(label);
+    case 'A': return chalk.cyan.bold(label);
+    case 'P': return chalk.bgYellow.black.bold(label);
+    default:  return chalk.white(label);
+  }
+}
+
 /** Pick a chalk colour function based on overall position. */
 function posColor(pos) {
   if (pos === 1) return chalk.green.bold;
@@ -291,6 +310,7 @@ function render() {
       iRating:    parseInt(driver.IRating ?? 0, 10),
       iRatingDelta: null, // filled in by calcIRatingDeltas()
       carFlag:    idxCarFlags[idx] ?? null,
+      licString:  String(driver.LicString ?? ''),
     });
   }
 
@@ -379,6 +399,7 @@ function render() {
       chalk.bold.white('Pos'),
       chalk.bold.white('#'),
       chalk.bold.white('Driver'),
+      chalk.bold.white('Lic'),
       chalk.bold.white('Class'),
       chalk.bold.white('Laps'),
       chalk.bold.white('Last Lap'),
@@ -389,8 +410,8 @@ function render() {
       chalk.bold.white('iR'),
       chalk.bold.white('Δ iR'),
     ],
-    colWidths:  [6, 6, 24, 9, 7, 11, 11, 12, 14, 6, 7, 8],
-    colAligns:  ['right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
+    colWidths:  [6, 6, 24, 9, 9, 7, 11, 11, 12, 14, 6, 7, 8],
+    colAligns:  ['right', 'right', 'left', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
     chars: {
       // Minimal border style for a cleaner look
       top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
@@ -439,6 +460,7 @@ function render() {
       p ? chalk.yellow.bold(`P${car.pos}`) : color(`P${car.pos}`),
       p ? chalk.yellow.bold(`#${car.number}`) : chalk.yellow(`#${car.number}`),
       nameCell,
+      licenseCell(car.licString),
       p ? chalk.yellow(car.carClass.slice(0, 7)) : chalk.gray(car.carClass.slice(0, 7)),
       p ? chalk.yellow.bold(String(car.laps)) : chalk.white(String(car.laps)),
       lastLapCell,
