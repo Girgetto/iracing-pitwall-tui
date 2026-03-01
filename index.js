@@ -422,8 +422,10 @@ function render() {
     style: { head: [], border: [], compact: false },
   });
 
-  for (const car of cars) {
-    const color = posColor(car.pos);
+  for (let i = 0; i < cars.length; i++) {
+    const car = cars[i];
+    const livePos = i + 1;
+    const color = posColor(livePos);
     const p     = car.isPlayer;
 
     const nameCell = car.stalled
@@ -457,7 +459,7 @@ function render() {
     const flagCell = getCarFlagCell(car.carFlag);
 
     table.push([
-      p ? chalk.yellow.bold(`P${car.pos}`) : color(`P${car.pos}`),
+      p ? chalk.yellow.bold(`P${livePos}`) : color(`P${livePos}`),
       p ? chalk.yellow.bold(`#${car.number}`) : chalk.yellow(`#${car.number}`),
       nameCell,
       licenseCell(car.licString),
@@ -465,7 +467,7 @@ function render() {
       p ? chalk.yellow.bold(String(car.laps)) : chalk.white(String(car.laps)),
       lastLapCell,
       p ? chalk.yellow(formatTime(car.bestLap)) : formatTime(car.bestLap),
-      p ? chalk.yellow(formatGap(car.gap, car.pos)) : formatGap(car.gap, car.pos),
+      p ? chalk.yellow(formatGap(car.gap, livePos)) : formatGap(car.gap, livePos),
       p ? chalk.yellow(lapBar(car.distPct)) : chalk.blue(lapBar(car.distPct)),
       flagCell,
       iRCell,
