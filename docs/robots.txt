@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://girgetto.github.io/iracing-pitwall-tui/sitemap.xml
