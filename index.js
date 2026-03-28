@@ -32,6 +32,7 @@ let currentTelemetry  = null;  // Latest snapshot from the MMAP telemetry sectio
 let currentSessionInfo = null; // Latest parsed session info YAML
 let isConnected        = false;
 let dotCount           = 0;    // Animated waiting indicator
+const carCache         = {};   // Last known state for each CarIdx, keyed by idx
 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -285,15 +286,21 @@ function render() {
     if (driver.CarIsPaceCar == 1) continue;
 
     const distPct = idxDistPct[idx];
-    // No telemetry data yet for this slot – skip
-    if (distPct == null) continue;
+    const disconnected = distPct == null;
+
+    if (disconnected) {
+      // Driver closed iRacing – use last known state so they stay on the board
+      if (!carCache[idx]) continue;
+      cars.push({ ...carCache[idx], disconnected: true });
+      continue;
+    }
 
     const pos = idxPos[idx] ?? 0;
 
     // A car is considered "off" if it stopped mid-lap and has laps > 0
     const stalled = distPct < 0.001 && (idxLap[idx] ?? 0) > 0;
 
-    cars.push({
+    const carRow = {
       idx,
       pos,
       classPos:   idxClassPos[idx] ?? 0,
@@ -311,7 +318,10 @@ function render() {
       iRatingDelta: null, // filled in by calcIRatingDeltas()
       carFlag:    idxCarFlags[idx] ?? null,
       licString:  String(driver.LicString ?? ''),
-    });
+      disconnected: false,
+    };
+    carCache[idx] = carRow; // keep cache up to date
+    cars.push(carRow);
   }
 
   // Always sort by total track progress (laps completed + fractional lap) so
@@ -352,7 +362,7 @@ function render() {
     : chalk.gray('N/A');
 
   // ── Header ─────────────────────────────────────────────────────────────────
-  console.log(chalk.bold.cyan('\n  iRacing Live Telemetry'));
+  console.log(chalk.bold.cyan('  iRacing Live Telemetry'));
   console.log(
     chalk.gray('  Session: ') + chalk.white(sessionType) +
     chalk.gray('   Lap: ')    + chalk.white(`${playerLap} / ${totalLaps}`) +
@@ -400,7 +410,6 @@ function render() {
       chalk.bold.white('#'),
       chalk.bold.white('Driver'),
       chalk.bold.white('Lic'),
-      chalk.bold.white('Class'),
       chalk.bold.white('Laps'),
       chalk.bold.white('Last Lap'),
       chalk.bold.white('Best Lap'),
@@ -410,8 +419,8 @@ function render() {
       chalk.bold.white('iR'),
       chalk.bold.white('Δ iR'),
     ],
-    colWidths:  [6, 6, 16, 4, 9, 7, 11, 11, 12, 14, 6, 7, 8],
-    colAligns:  ['right', 'right', 'left', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
+    colWidths:  [6, 6, 24, 4, 7, 11, 11, 12, 14, 6, 7, 8],
+    colAligns:  ['right', 'right', 'left', 'left', 'right', 'right', 'right', 'right', 'right', 'center', 'right', 'right'],
     chars: {
       // Minimal border style for a cleaner look
       top: '─', 'top-mid': '┬', 'top-left': '┌', 'top-right': '┐',
@@ -422,17 +431,21 @@ function render() {
     style: { head: [], border: [], compact: false },
   });
 
-  for (let i = 0; i < cars.length; i++) {
-    const car = cars[i];
+  const visibleCars = cars.slice(0, 25);
+
+  for (let i = 0; i < visibleCars.length; i++) {
+    const car = visibleCars[i];
     const livePos = i + 1;
     const color = posColor(livePos);
     const p     = car.isPlayer;
 
-    const nameCell = car.stalled
-      ? chalk.red(car.name.padEnd(14).slice(0, 14))
-      : p
-        ? chalk.yellow.bold(('▶ ' + car.name).padEnd(14).slice(0, 14))
-        : color(car.name.padEnd(14).slice(0, 14));
+    const nameCell = car.disconnected
+      ? chalk.gray(('✕ ' + car.name).padEnd(22).slice(0, 22))
+      : car.stalled
+        ? chalk.red(car.name.padEnd(22).slice(0, 22))
+        : p
+          ? chalk.yellow.bold(('▶ ' + car.name).padEnd(22).slice(0, 22))
+          : color(car.name.padEnd(22).slice(0, 22));
 
     // iRating cell
     const iRCell = car.iRating > 0
@@ -463,7 +476,6 @@ function render() {
       p ? chalk.yellow.bold(`#${car.number}`) : chalk.yellow(`#${car.number}`),
       nameCell,
       licenseCell(car.licString),
-      p ? chalk.yellow(car.carClass.slice(0, 7)) : chalk.gray(car.carClass.slice(0, 7)),
       p ? chalk.yellow.bold(String(car.laps)) : chalk.white(String(car.laps)),
       lastLapCell,
       p ? chalk.yellow(formatTime(car.bestLap)) : formatTime(car.bestLap),
@@ -506,6 +518,9 @@ iracing.on('Disconnected', () => {
   isConnected        = false;
   currentTelemetry   = null;
   currentSessionInfo = null;
+  // Clear cached driver state so stale data from this session doesn't appear
+  // in a future session.
+  for (const key of Object.keys(carCache)) delete carCache[key];
 });
 
 // Emitted whenever the session info YAML changes (new driver, session advance…).
@@ -524,13 +539,27 @@ iracing.on('Telemetry', (data) => {
 
 // Redraw every 500 ms.  This is independent of how fast iRacing writes data;
 // we simply display whatever the latest snapshot happens to be at each tick.
+// Enter the alternate screen buffer so the TUI never interferes with the
+// normal scrollback and \x1B[H always homes to the true top of the canvas.
+process.stdout.write('\x1B[?1049h');
+
+function exitAltScreen() {
+  process.stdout.write('\x1B[?25h\x1B[?1049l');
+}
+
+// Restore the normal screen on clean exit (Ctrl+C).
+process.on('SIGINT', () => {
+  clearInterval(renderInterval);
+  exitAltScreen();
+  process.exit(0);
+});
+
 const renderInterval = setInterval(() => {
   try {
     render();
   } catch (err) {
     clearInterval(renderInterval);
-    // Move to a clean line below the TUI so the error is not overwritten.
-    process.stdout.write('\x1B[J\x1B[?25h\n');
+    exitAltScreen();
     console.error(chalk.red.bold('Render error (display loop stopped):'));
     console.error(err);
   }
@@ -541,7 +570,7 @@ try {
   render();
 } catch (err) {
   clearInterval(renderInterval);
-  process.stdout.write('\x1B[J\x1B[?25h\n');
+  exitAltScreen();
   console.error(chalk.red.bold('Render error (display loop stopped):'));
   console.error(err);
 }
@@ -549,7 +578,7 @@ try {
 // Catch any other uncaught errors so they are not swallowed by the TUI loop.
 process.on('uncaughtException', (err) => {
   clearInterval(renderInterval);
-  process.stdout.write('\x1B[J\x1B[?25h\n');
+  exitAltScreen();
   console.error(chalk.red.bold('Uncaught exception:'));
   console.error(err);
   process.exit(1);
@@ -557,7 +586,7 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   clearInterval(renderInterval);
-  process.stdout.write('\x1B[J\x1B[?25h\n');
+  exitAltScreen();
   console.error(chalk.red.bold('Unhandled promise rejection:'));
   console.error(reason);
   process.exit(1);
